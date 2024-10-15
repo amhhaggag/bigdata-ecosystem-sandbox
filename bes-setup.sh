@@ -16,17 +16,16 @@ start_services() {
     echo "Starting services with Docker Compose..."
 
     # Bring up each service from the compose directory
-    docker compose -f compose/minio.yml up -d
-    docker compose -f compose/hdfs.yml up -d --build
-    docker compose -f compose/mapred.yml up -d --build
-    docker compose -f compose/hive.yml up -d --build
-    docker compose -f compose/spark.yml up -d
-    docker compose -f compose/trino.yml up -d
-    docker compose -f compose/nessie.yml up -d
-    docker compose -f compose/airflow.yml up -d
-    docker compose -f compose/flink.yml up -d
-    docker compose -f compose/kafka.yml up -d
-    docker compose -f compose/nifi.yml up -d
+    docker compose up -d minio
+    docker compose up -d --build namenode datanode nodemanager resourcemanager historyserver
+    docker compose up -d --build hive-metastore hive-server
+    docker compose up -d spark-master spark-worker
+    docker compose up -d trino
+    docker compose up -d nessie
+    docker compose up -d airflow-db airflow
+    docker compose up -d jobmanager taskmanager
+    docker compose up -d kafka schema-registry postgresql conduktor-console conduktor-monitoring
+    docker compose up -d nifi-zookeeper nifi
     
     echo "All services started successfully."
 }
@@ -35,7 +34,7 @@ start_services() {
 execute_postgres_sql() {
     
     echo "Starting Postgres docker container ...\n"
-    docker compose -f compose/postgres.yml up -d
+    docker compose up -d postgres
     
     sleep 15
 

@@ -306,7 +306,7 @@ services:
 
 ## Flink
   jobmanager:
-    image: flink:1.20.0
+    image: amhhaggag/flink-1.20.0:1.0
     hostname: jobmanager
     container_name: flink-jobmanager
     environment:
@@ -316,13 +316,13 @@ services:
     command: jobmanager
 
   taskmanager:
-    image: flink:1.20.0
+    image: amhhaggag/flink-1.20.0:1.0
     container_name: flink-taskmanager
     depends_on:
       - jobmanager
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
-      - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=2
+      - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=4
     command: taskmanager
 
 ## Nessie Catalog for Iceberg Tables
