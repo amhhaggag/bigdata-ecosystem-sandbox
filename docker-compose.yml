@@ -1,0 +1,348 @@
+services:
+## PostgreSQL
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    volumes:
+      - ./mnt/postgres:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: "admin"
+      POSTGRES_USER: "admin"
+      POSTGRES_PASSWORD: "admin"
+    ports:
+      - "5432:5432"
+
+## MinIO Object Storage
+  minio:
+    container_name: minio
+    image: minio/minio:RELEASE.2024-05-10T01-41-38Z  # ii
+    volumes:
+      - ./mnt/minio:/data  # Named volume for persistent MinIO data
+    ports:
+      - "9000:9000"   # Expose MinIO server port
+      - "9001:9001"   # Expose MinIO console port
+    environment:
+      MINIO_ROOT_USER: minioadmin  # Set desired access key
+      MINIO_ROOT_PASSWORD: minioadmin  # Set desired secret key
+      AWS_REGION: us-east-1
+    command: server /data --console-address ":9001"
+    restart: on-failure  # Restart the container if it fails
+
+## Hadoop
+  namenode:
+    build: ./docker/hadoop/hadoop-namenode
+    restart: on-failure
+    container_name: namenode
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "5"
+          max-size: "10m"
+    ports:
+      - "9870:9870"
+    volumes:
+      - ./mnt/hadoop/namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=hadoop_cluster
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "namenode", "9870" ]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+
+  datanode:
+    build: ./docker/hadoop/hadoop-datanode
+    restart: on-failure
+    container_name: datanode
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "5"
+          max-size: "10m"
+    depends_on:
+      - namenode
+    volumes:
+      - ./mnt/hadoop/datanode:/hadoop/dfs/data
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "datanode", "9864" ]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+
+  nodemanager:
+    build: ./docker/hadoop/hadoop-nodemanager
+    restart: on-failure
+    container_name: nodemanager
+    depends_on:
+      - namenode
+    ports:
+      - "8042:8042"
+
+  resourcemanager:
+    build: ./docker/hadoop/hadoop-resourcemanager
+    restart: on-failure
+    container_name: resourcemanager
+    depends_on:
+      - namenode
+    ports:
+      - "8088:8088"
+
+  historyserver:
+    build: ./docker/hadoop/hadoop-historyserver
+    restart: on-failure
+    container_name: historyserver
+    depends_on:
+      - namenode
+
+## Hive
+  hive-metastore:
+    build: ./docker/hive/hive-metastore
+    restart: on-failure
+    container_name: hive-metastore
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "5"
+          max-size: "10m"
+    depends_on:
+      - namenode
+      - datanode
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870 datanode:9864 postgres:5432
+    ports:
+      - "9083:9083"
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "hive-metastore", "9083" ]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+
+  hive-server:
+    build: ./docker/hive/hive-server
+    restart: on-failure
+    container_name: hive-server
+    logging:
+      driver: "json-file"
+      options:
+          max-file: "5"
+          max-size: "10m"
+    depends_on:
+      - hive-metastore
+    environment:
+      - SERVICE_PRECONDITION=hive-metastore:9083
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "hive-server", "10002" ]
+      timeout: 45s
+      interval: 10s
+      retries: 10
+
+## Spark
+  spark-master:
+    image: amhhaggag/spark-3.5.1:1.0
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "7080:8080"  # Spark master web UI
+      - "7077:7077"  # Spark master port
+    command: org.apache.spark.deploy.master.Master
+    environment:
+      - SPARK_MASTER_HOST=spark-master
+
+  spark-worker:
+    image: amhhaggag/spark-3.5.1:1.0
+    container_name: spark-worker-1
+    hostname: spark-worker-1
+    depends_on:
+      - spark-master
+    ports:
+      - "7081:8081"  # Spark worker web UI
+    command: org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      - SPARK_MASTER=spark://spark-master:7077
+
+## Airflow
+  airflow-db:
+    image: postgres:14
+    container_name: airflow-db
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow_pwd
+      POSTGRES_DB: airflow_db
+    ports:
+      - "5532:5432"
+    volumes:
+      - ./mnt/airflow/postgres_data:/var/lib/postgresql/data
+
+  airflow:
+    image: amhhaggag/airflow-2.6.3:1.0 
+    container_name: airflow
+    environment:
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow_pwd@airflow-db:5432/airflow_db
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    ports:
+      - "8090:8080"
+    depends_on:
+      - airflow-db
+    volumes:
+      - ./mnt/airflow/dags:/opt/airflow/dags
+
+## Trino
+  trino:
+    image: amhhaggag/trino-450:1.0
+    restart: on-failure
+    container_name: trino
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./mnt/trino/etc:/opt/trino/etc
+    environment:
+      - TRINO_VERSION=450
+    entrypoint: ["/opt/trino/bin/entrypoint.sh"]
+
+## Kafka
+  kafka:
+    image: confluentinc/cp-kafka:7.4.3
+    container_name: kafka
+    hostname: kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT'
+      KAFKA_LISTENERS: 'INTERNAL://kafka:29092,CONTROLLER://kafka:29093,EXTERNAL://0.0.0.0:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka:29092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      CLUSTER_ID: 'ciWo7IWazngRchmPES6q5B=='
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
+
+  schema-registry:
+      image: confluentinc/cp-schema-registry:7.4.3
+      container_name: schema-registry
+      hostname: schema-registry
+      ports:
+        - "8081:8081"
+      environment:
+        SCHEMA_REGISTRY_HOST_NAME: schema-registry
+        SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:29092'
+        SCHEMA_REGISTRY_LISTENERS: 'http://0.0.0.0:8081'
+      depends_on:
+        - kafka
+
+  postgresql:
+    image: postgres:14
+    container_name: conduktor-postgresql
+    hostname: postgresql
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: "conduktor-console"
+      POSTGRES_USER: "conduktor"
+      POSTGRES_PASSWORD: "change_me"
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256"
+
+  conduktor-console:
+    image: conduktor/conduktor-console:1.27.0
+    container_name: conduktor-console
+    depends_on:
+      - postgresql
+    ports:
+      - "9980:8080"
+    volumes:
+      - conduktor_data:/var/conduktor
+    environment:
+      CDK_DATABASE_URL: "postgresql://conduktor:change_me@postgresql:5432/conduktor-console"
+      CDK_MONITORING_CORTEX-URL: http://conduktor-monitoring:9009/
+      CDK_MONITORING_ALERT-MANAGER-URL: http://conduktor-monitoring:9010/
+      CDK_MONITORING_CALLBACK-URL: http://conduktor-platform:8080/monitoring/api/
+      CDK_MONITORING_NOTIFICATIONS-CALLBACK-URL: http://localhost:8080
+      
+  conduktor-monitoring:
+    image: conduktor/conduktor-console-cortex:1.27.0
+    container_name: conduktor-monitoring
+    environment:
+      CDK_CONSOLE-URL: "http://conduktor-console:8080"
+
+## NiFi
+  nifi-zookeeper:
+    hostname: nifi-zookeeper
+    container_name: nifi-zookeeper
+    image: 'bitnami/zookeeper:3.7.2'
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    restart: on-failure  # Restart the container if it fails
+
+  nifi:
+    hostname: apache-nifi
+    container_name: nifi
+    image: 'apache/nifi:1.23.2'
+    ports:
+      - '8060:8060'
+    environment:
+      - NIFI_WEB_HTTP_PORT=8060
+      - NIFI_CLUSTER_IS_NODE=true
+      - NIFI_CLUSTER_NODE_PROTOCOL_PORT=8082
+      - NIFI_ZK_CONNECT_STRING=nifi-zookeeper:2181
+      - NIFI_ELECTION_MAX_WAIT=30 sec
+      - NIFI_SENSITIVE_PROPS_KEY='12345678901234567890A'
+    volumes:
+      - ./mnt/nifi/database_repository:/opt/nifi/nifi-current/database_repository
+      - ./mnt/nifi/flowfile_repository:/opt/nifi/nifi-current/flowfile_repository
+      - ./mnt/nifi/content_repository:/opt/nifi/nifi-current/content_repository
+      - ./mnt/nifi/provenance_repository:/opt/nifi/nifi-current/provenance_repository
+      - ./mnt/nifi/state:/opt/nifi/nifi-current/state
+      - ./mnt/nifi/logs:/opt/nifi/nifi-current/logs
+    restart: on-failure  # Restart the container if it fails
+
+## Flink
+  jobmanager:
+    image: flink:1.20.0
+    hostname: jobmanager
+    container_name: flink-jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+    ports:
+      - "9091:8081"  # Flink Web UI
+    command: jobmanager
+
+  taskmanager:
+    image: flink:1.20.0
+    container_name: flink-taskmanager
+    depends_on:
+      - jobmanager
+    environment:
+      - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=2
+    command: taskmanager
+
+## Nessie Catalog for Iceberg Tables
+  nessie:
+    image: projectnessie/nessie:0.76.6
+    container_name: nessie
+    environment:
+      - QUARKUS_PROFILE=prod
+      - QUARKUS_HTTP_PORT=19120
+      - QUARKUS_LOG_CONSOLE_FORMAT=%d{yyyy-MM-dd HH:mm:ss} %-5p [%c{1.}] (%t) %s%e%n
+      - QUARKUS_LOG_LEVEL=INFO
+    volumes:
+      - ./mnt/nessie-data:/nessie/data  # Mount local directory to persist RocksDB data
+    ports:
+      - "19120:19120"  # Expose Nessie API port
+
+volumes:
+  pg_data: {}
+  conduktor_data: {}
+
+networks:
+  default:
+    name: bes-network
