@@ -32,10 +32,9 @@ This platform contains the following tools:
 To Setup all the sandbox tools use the following script
 
 ```bash
-git clone https://github.com/amhhaggag/bigdata-ecosystem-sanbox.git
+git clone https://github.com/amhhaggag/bigdata-ecosystem-sandbox.git
 cd bigdata-ecosystem-sandbox
 
-chmod +x bes-setup.sh
 ./bes-setup.sh
 ```
 
