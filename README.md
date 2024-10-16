@@ -33,7 +33,7 @@ To Setup all the sandbox tools use the following script
 
 ```bash
 git clone https://github.com/amhhaggag/bigdata-ecosystem-sanbox.git
-cd bigdata-ecosystem-sanbox
+cd bigdata-ecosystem-sandbox
 
 chmod +x bes-setup.sh
 ./bes-setup.sh
