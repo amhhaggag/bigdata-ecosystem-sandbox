@@ -48,3 +48,16 @@ This command will do the following:
 2. Prepare the PostgreSQL Database for Hive-Metastore Service
 3. Add the Trino Configurations to it’s specific mounted volume (Local Directory)
 4. Create and Start all the containers
+
+
+
+# Currently Working On
+- Building a Command Line Interface for the Sandbox.
+
+# Future Plans for the Sandbox
+- Adding the Following Tools
+   - MongoDB
+   - Druid
+   - Superset
+  
+Let's Connect if you are interested!
