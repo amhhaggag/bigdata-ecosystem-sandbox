@@ -4,8 +4,9 @@ BES (Bigdata Ecosystem Sandbox) is an all-in-one development and learning enviro
 # Prerequisites
 
 - Docker & Docker Compose
-- RAM: 8 GB
+- RAM: 10 GB
 - CPU: 4 Cores
+- Storage: 40 GB
 
 # Sandbox Components
 
