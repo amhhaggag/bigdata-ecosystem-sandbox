@@ -40,15 +40,8 @@ cd bigdata-ecosystem-sandbox
 ```
 
 This command will do the following:
-
-1. Pull the necessary Docker images from Docker Hub
-   - amhhaggag/hadoop-base-3.1.1
-   - amhhaggag/hive-base-3.1.2
-   - amhhaggag/spark-3.5.1
-2. Prepare the PostgreSQL Database for Hive-Metastore Service
-3. Add the Trino Configurations to it’s specific mounted volume (Local Directory)
-4. Create and Start all the containers
-
+1. Add the Trino Configurations to it’s specific mounted volume (Local Directory)
+2. Create and Start all the containers
 
 
 # Currently Working On
@@ -59,5 +52,7 @@ This command will do the following:
    - MongoDB
    - Druid
    - Superset
+   - Atlas
+   - Hue
   
 Let's Connect if you are interested!
