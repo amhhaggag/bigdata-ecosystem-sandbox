@@ -24,6 +24,16 @@ This platform contains the following tools:
 - Iceberg
 - Airflow
 
+# Repository Components
+- bes-cleanup.sh: to stop and remove all the running containers
+- bes-setup.sh: to setup and start all the sandbox components
+- Command Line Tool for the Sandbox
+    - bes-linux-amd64: CLI Tool for linux users
+    - bes-macos-arm64: CLI Tool for MAC Users with ARM Processor
+    - bes-windows-amd64: CLI Tool for Windows Users
+- docker-compose.yml: The YAML file that contains all the containers
+- updates.md: a Markdown File for logging the updates on the Sandbox
+
 # Getting Started
 
 ### Setup ALL the Sandbox Tools
@@ -56,3 +66,4 @@ This command will do the following:
    - Hue
   
 Let's Connect if you are interested!
+

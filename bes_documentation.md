@@ -19,6 +19,11 @@ Ensure that you have Docker and Docker Compose installed on your machine. You al
 
 ## Usage
 
+Rename the CLI Tool corresponding to your machine architecture as the following example:
+```bash
+mv bes-linux-amd64 bes
+```
+
 ### 1. Manage Docker Containers
 The service command allows you to manage services defined in your docker-compose.yml file. You can use this command to start, stop, or bring up services.
 
