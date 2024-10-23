@@ -25,7 +25,14 @@ services:
       MINIO_ROOT_USER: minioadmin  # Set desired access key
       MINIO_ROOT_PASSWORD: minioadmin  # Set desired secret key
       AWS_REGION: us-east-1
-    command: server /data --console-address ":9001"
+    entrypoint: >
+      /bin/sh -c "
+      minio server /data --console-address ':9001' &
+      sleep 5;
+      mc alias set minio http://minio:9000 minioadmin minioadmin;
+      mc mb minio/data --ignore-existing;
+      mc mb minio/iceberg-warehouse --ignore-existing;
+      tail -f /dev/null"
     restart: on-failure  # Restart the container if it fails
 
 ## Hadoop
@@ -138,6 +145,9 @@ services:
           max-size: "10m"
     depends_on:
       - hive-metastore
+      - nodemanager
+      - resourcemanager
+      - historyserver
     environment:
       - SERVICE_PRECONDITION=hive-metastore:9083
     ports:
@@ -265,7 +275,6 @@ services:
     container_name: conduktor-console
     depends_on:
       - postgresql
-      - kafka
     ports:
       - "9980:8080"
     volumes:
@@ -282,8 +291,6 @@ services:
     container_name: conduktor-monitoring
     environment:
       CDK_CONSOLE-URL: "http://conduktor-console:8080"
-    depends_on:
-      - conduktor-console
 
 ## NiFi
   nifi-zookeeper:
@@ -336,7 +343,7 @@ services:
       - jobmanager
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
-      - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=4
+      - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=2
     command: taskmanager
 
 ## Nessie Catalog for Iceberg Tables
@@ -352,7 +359,6 @@ services:
       - ./mnt/nessie-data:/nessie/data  # Mount local directory to persist RocksDB data
     ports:
       - "19120:19120"  # Expose Nessie API port
-
 
 volumes:
   pg_data: {}
