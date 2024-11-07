@@ -212,7 +212,7 @@ services:
 
 ## Trino
   trino:
-    image: amhhaggag/trino-450:1.0
+    image: amhhaggag/trino-450:1.1
     restart: on-failure
     container_name: trino
     ports:
@@ -235,7 +235,7 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT'
       KAFKA_LISTENERS: 'INTERNAL://kafka:29092,CONTROLLER://kafka:29093,EXTERNAL://0.0.0.0:9092'
-      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka:29092'
+      KAFKA_ADVERTISED_LISTENERS: 'INTERNAL://kafka:29092,EXTERNAL://localhost:9092'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'INTERNAL'
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
       KAFKA_PROCESS_ROLES: 'broker,controller'
@@ -332,6 +332,9 @@ services:
     container_name: flink-jobmanager
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
     ports:
       - "9091:8081"  # Flink Web UI
     command: jobmanager
@@ -344,21 +347,67 @@ services:
     environment:
       - JOB_MANAGER_RPC_ADDRESS=jobmanager
       - TASK_MANAGER_NUMBER_OF_TASK_SLOTS=2
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
     command: taskmanager
 
 ## Nessie Catalog for Iceberg Tables
+  nessie-init:
+    image: postgres:14
+    depends_on:
+      - postgres
+    command: >
+      bash -c """
+      until pg_isready -h postgres -p 5432; do sleep 2; done;
+      psql -h postgres -U admin -d admin -c \"DO \\$\\$ BEGIN IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'nessie') THEN CREATE DATABASE nessie; END IF; END \\$\\$;\";
+      psql -h postgres -U admin -d admin -c \"DO \\$\\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nessie') THEN CREATE USER nessie WITH PASSWORD 'nessie'; END IF; END \\$\\$;\";
+      psql -h postgres -U admin -d admin -c 'GRANT ALL PRIVILEGES ON DATABASE nessie TO nessie;'
+      """
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      PGPASSWORD: admin
+
   nessie:
-    image: projectnessie/nessie:0.76.6
+    image: ghcr.io/projectnessie/nessie:0.99.0
     container_name: nessie
     environment:
       - QUARKUS_PROFILE=prod
       - QUARKUS_HTTP_PORT=19120
       - QUARKUS_LOG_CONSOLE_FORMAT=%d{yyyy-MM-dd HH:mm:ss} %-5p [%c{1.}] (%t) %s%e%n
-      - QUARKUS_LOG_LEVEL=INFO
+      - QUARKUS_LOG_LEVEL=DEBUG
+      # Version store settings.
+      # This example uses Postgres as the version store.
+      - nessie.version.store.type=JDBC
+      - nessie.version.store.persist.jdbc.datasource=postgresql
+      - quarkus.datasource.postgresql.jdbc.url=jdbc:postgresql://postgres:5432/nessie
+      - quarkus.datasource.postgresql.username=nessie
+      - quarkus.datasource.postgresql.password=nessie
+      # AuthN settings.
+      # This examples uses Keycloak for authentication.
+      - nessie.server.authentication.enabled=false
+        #- quarkus.oidc.auth-server-url=http://keycloak:8080/realms/iceberg
+        #- quarkus.oidc.client-id=client1
+        #- quarkus.oidc.token.issuer=http://keycloak:8080/realms/iceberg
+      # Object store settings.
+      # This example uses MinIO as the object store.
+      - nessie.catalog.default-warehouse=warehouse
+      - nessie.catalog.warehouses.warehouse.location=s3://warehouse/
+      - nessie.catalog.service.s3.default-options.region=us-east-1
+      - nessie.catalog.service.s3.default-options.path-style-access=true
+      - nessie.catalog.service.s3.default-options.access-key=urn:nessie-secret:quarkus:nessie.catalog.secrets.access-key
+      - nessie.catalog.secrets.access-key.name=minioadmin
+      - nessie.catalog.secrets.access-key.secret=minioadmin
+      # MinIO endpoint
+      - nessie.catalog.service.s3.default-options.endpoint=http://minio:9000/
     volumes:
       - ./mnt/nessie-data:/nessie/data  # Mount local directory to persist RocksDB data
     ports:
       - "19120:19120"  # Expose Nessie API port
+    depends_on:
+      - nessie-init
+      - postgres
 
 volumes:
   pg_data: {}
