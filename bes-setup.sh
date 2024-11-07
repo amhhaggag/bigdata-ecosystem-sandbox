@@ -19,27 +19,7 @@ start_services() {
     echo "All services started successfully."
 }
 
-setup_trino_directory() {
-    echo "Setting up Trino configuration directory..."
-
-    # Create the directory if it doesn't exist
-    if [ ! -d "./mnt/trino" ]; then
-        mkdir -p ./mnt/trino
-        echo "./mnt/trino directory created."
-    fi
-
-    # Copy the configuration files
-    cp -r ./conf/trino/* ./mnt/trino/
-
-    echo "Configuration files copied to ./mnt/trino."
-}
-
-# Main script execution
 echo "Starting setup..."
-
-
-# Set up the Trino configuration directory
-setup_trino_directory
 
 # Start the services
 start_services
@@ -50,3 +30,4 @@ mkdir -p ./mnt
 chmod -R 777 ./mnt
 
 echo "Setup completed successfully."
+
