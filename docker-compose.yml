@@ -32,6 +32,7 @@ services:
       mc alias set minio http://minio:9000 minioadmin minioadmin;
       mc mb minio/data --ignore-existing;
       mc mb minio/iceberg-warehouse --ignore-existing;
+      mc mb minio/warehouse --ignore-existing;
       tail -f /dev/null"
     restart: on-failure  # Restart the container if it fails
 
@@ -217,8 +218,8 @@ services:
     container_name: trino
     ports:
       - "8080:8080"
-    #volumes:
-      #- ./mnt/trino/etc:/opt/trino/etc
+        #volumes:
+        #- ./mnt/trino/etc:/opt/trino/etc
     environment:
       - TRINO_VERSION=450
     entrypoint: ["/opt/trino/bin/entrypoint.sh"]
@@ -315,12 +316,13 @@ services:
       - NIFI_ELECTION_MAX_WAIT=30 sec
       - NIFI_SENSITIVE_PROPS_KEY='12345678901234567890A'
     volumes:
-      - ./mnt/nifi/database_repository:/opt/nifi/nifi-current/database_repository
-      - ./mnt/nifi/flowfile_repository:/opt/nifi/nifi-current/flowfile_repository
-      - ./mnt/nifi/content_repository:/opt/nifi/nifi-current/content_repository
-      - ./mnt/nifi/provenance_repository:/opt/nifi/nifi-current/provenance_repository
-      - ./mnt/nifi/state:/opt/nifi/nifi-current/state
-      - ./mnt/nifi/logs:/opt/nifi/nifi-current/logs
+      - nifi-database_repository:/opt/nifi/nifi-current/database_repository
+      - nifi-flowfile_repository:/opt/nifi/nifi-current/flowfile_repository
+      - nifi-content_repository:/opt/nifi/nifi-current/content_repository
+      - nifi-provenance_repository:/opt/nifi/nifi-current/provenance_repository
+      - nifi-state:/opt/nifi/nifi-current/state
+      - nifi-logs:/opt/nifi/nifi-current/logs
+      - nifi-conf:/opt/nifi/nifi-current/conf
     restart: on-failure  # Restart the container if it fails
     depends_on:
       - nifi-zookeeper
@@ -360,7 +362,7 @@ services:
     command: >
       bash -c """
       until pg_isready -h postgres -p 5432; do sleep 2; done;
-      psql -h postgres -U admin -d admin -c \"DO \\$\\$ BEGIN IF NOT EXISTS (SELECT FROM pg_database WHERE datname = 'nessie') THEN CREATE DATABASE nessie; END IF; END \\$\\$;\";
+      psql -h postgres -U admin -d admin -c 'CREATE DATABASE nessie;';
       psql -h postgres -U admin -d admin -c \"DO \\$\\$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'nessie') THEN CREATE USER nessie WITH PASSWORD 'nessie'; END IF; END \\$\\$;\";
       psql -h postgres -U admin -d admin -c 'GRANT ALL PRIVILEGES ON DATABASE nessie TO nessie;'
       """
@@ -412,6 +414,13 @@ services:
 volumes:
   pg_data: {}
   conduktor_data: {}
+  nifi-database_repository: {}
+  nifi-content_repository: {}
+  nifi-flowfile_repository: {}
+  nifi-provenance_repository: {}
+  nifi-state: {}
+  nifi-logs: {}
+  nifi-conf: {}
 
 networks:
   default:
